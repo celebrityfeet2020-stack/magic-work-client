@@ -2,8 +2,12 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import puppeteer from 'puppeteer-core'
+import axios from 'axios'
 import { RPAEngine } from './rpa_engine'
 import { ASRClient } from './asr_client'
+
+// 版本号 - 用于确认客户端版本
+const CLIENT_VERSION = '2.0.1'
 
 // 配置常量（从环境变量或默认值）
 const CONFIG = {
@@ -15,15 +19,26 @@ const CONFIG = {
   PROFILES_DIR: process.env.VITE_PROFILES_DIR || 'C:\\MagicWork\\Profiles'
 }
 
+// 主窗口引用
+let mainWindow: BrowserWindow | null = null
+
+// 发送日志到渲染进程
+function sendLog(message: string): void {
+  console.log(`[Main] ${message}`)
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('log', message)
+  }
+}
+
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1200,
     minHeight: 700,
     show: false,
     autoHideMenuBar: true,
-    title: '魔作智控 2.0',
+    title: `魔作智控 2.0 (v${CLIENT_VERSION})`,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -33,7 +48,8 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    mainWindow?.show()
+    sendLog(`客户端版本: v${CLIENT_VERSION}`)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -54,7 +70,7 @@ let pageInstance: any = null
 
 ipcMain.handle('launch-browser', async (_event, config) => {
   try {
-    console.log('[Main] Launching browser with config:', config)
+    sendLog('正在启动浏览器...')
     
     const browser = await puppeteer.launch({
       executablePath: config.executablePath || CONFIG.CHROME_PATH,
@@ -80,10 +96,10 @@ ipcMain.handle('launch-browser', async (_event, config) => {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     )
     
-    console.log('[Main] Browser launched successfully, PID:', browser.process()?.pid)
+    sendLog(`浏览器启动成功, PID: ${browser.process()?.pid}`)
     return { success: true, pid: browser.process()?.pid }
   } catch (error: any) {
-    console.error('[Main] Browser launch failed:', error)
+    sendLog(`浏览器启动失败: ${error.message}`)
     return { success: false, error: error.message }
   }
 })
@@ -93,6 +109,7 @@ ipcMain.handle('close-browser', async () => {
     await browserInstance.close()
     browserInstance = null
     pageInstance = null
+    sendLog('浏览器已关闭')
     return { success: true }
   }
   return { success: false, error: 'No browser instance' }
@@ -103,6 +120,7 @@ ipcMain.handle('navigate-to', async (_event, url: string) => {
   
   try {
     await pageInstance.goto(url, { waitUntil: 'networkidle2' })
+    sendLog(`导航到: ${url}`)
     return { success: true, url }
   } catch (error: any) {
     return { success: false, error: error.message }
@@ -114,14 +132,14 @@ let asrClient: ASRClient | null = null
 
 ipcMain.handle('start-asr', (_event, controlId: string) => {
   if (asrClient) {
-    console.log('[Main] ASR already running')
+    sendLog('ASR已在运行中')
     return { success: false, error: 'ASR already running' }
   }
   
-  console.log('[Main] Starting ASR for control:', controlId)
+  sendLog(`启动ASR, 智控ID: ${controlId}`)
   
   asrClient = new ASRClient(CONFIG.ASR_WS_URL, (text: string) => {
-    console.log('[Main] ASR Result:', text)
+    sendLog(`ASR识别结果: ${text}`)
     
     // 广播ASR结果到所有窗口
     BrowserWindow.getAllWindows().forEach(win => {
@@ -137,15 +155,16 @@ ipcMain.handle('stop-asr', () => {
   if (asrClient) {
     asrClient.disconnect()
     asrClient = null
+    sendLog('ASR已停止')
     return { success: true }
   }
   return { success: false, error: 'ASR not running' }
 })
 
 // ===== RPA 自动化执行 =====
-// 修复：使用正确的RPA Tool API格式
+// 使用axios替代fetch，更可靠
 ipcMain.handle('run-rpa', async (_event, { action, params }) => {
-  console.log('[Main] Running RPA action:', action, params)
+  sendLog(`执行RPA动作: ${action}, 参数: ${JSON.stringify(params)}`)
   
   try {
     // 根据action类型构建正确的API URL
@@ -167,11 +186,13 @@ ipcMain.handle('run-rpa', async (_event, { action, params }) => {
     } else if (action === 'screenshot') {
       // 截图操作
       apiUrl = `${CONFIG.RPA_BASE_URL}/${CONFIG.RPA_AUTH_TOKEN}/api/screenshot`
-      // GET请求，不需要body
-      const response = await fetch(apiUrl)
-      if (response.ok) {
+      sendLog(`RPA截图请求: ${apiUrl}`)
+      const response = await axios.get(apiUrl, { responseType: 'arraybuffer', timeout: 10000 })
+      if (response.status === 200) {
+        sendLog('RPA截图成功')
         return { success: true, message: 'Screenshot captured' }
       } else {
+        sendLog('RPA截图失败')
         return { success: false, error: 'Screenshot failed' }
       }
     } else if (action === 'execute' && params.command) {
@@ -179,33 +200,45 @@ ipcMain.handle('run-rpa', async (_event, { action, params }) => {
       apiUrl = `${CONFIG.RPA_BASE_URL}/${CONFIG.RPA_AUTH_TOKEN}/api/execute`
       requestBody = { command: params.command, timeout: params.timeout || 30 }
     } else {
+      sendLog(`未知的RPA动作: ${action}`)
       return { success: false, error: `Unknown action: ${action}` }
     }
     
-    console.log('[Main] RPA API URL:', apiUrl)
-    console.log('[Main] RPA Request Body:', requestBody)
+    sendLog(`RPA请求URL: ${apiUrl}`)
+    sendLog(`RPA请求体: ${JSON.stringify(requestBody)}`)
     
-    const response = await fetch(apiUrl, {
-      method: 'POST',
+    const response = await axios.post(apiUrl, requestBody, {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(requestBody)
+      timeout: 10000
     })
     
-    const result = await response.json()
-    console.log('[Main] RPA Response:', result)
+    const result = response.data
+    sendLog(`RPA响应: ${JSON.stringify(result)}`)
     
     // RPA Tool返回的结果中success字段表示执行是否成功
     if (result.success !== undefined) {
+      sendLog(result.success ? 'RPA执行成功' : `RPA执行失败: ${result.error || '未知错误'}`)
       return result
     } else {
       // 兼容不同的返回格式
+      sendLog('RPA执行完成')
       return { success: true, data: result }
     }
   } catch (error: any) {
-    console.error('[Main] RPA execution failed:', error)
-    return { success: false, error: error.message }
+    const errorMsg = error.response?.data?.error || error.message || '未知错误'
+    sendLog(`RPA执行异常: ${errorMsg}`)
+    return { success: false, error: errorMsg }
+  }
+})
+
+// ===== 获取配置 =====
+ipcMain.handle('get-config', () => {
+  return {
+    version: CLIENT_VERSION,
+    apiBaseUrl: CONFIG.API_BASE_URL,
+    rpaBaseUrl: CONFIG.RPA_BASE_URL
   }
 })
 
@@ -241,4 +274,4 @@ app.on('window-all-closed', () => {
 })
 
 // 导出配置供其他模块使用
-export { CONFIG }
+export { CONFIG, CLIENT_VERSION }
