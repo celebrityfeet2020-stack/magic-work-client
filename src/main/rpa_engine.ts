@@ -37,6 +37,11 @@ export class RPAEngine {
     }
   }
 
+  // 构建RPA API的完整URL
+  private buildRPAUrl(endpoint: string): string {
+    return `${this.localRPA.baseUrl}/${this.localRPA.authToken}/api${endpoint}`
+  }
+
   // 从后端加载RPA脚本
   async loadScript(platform: string): Promise<RPAScript> {
     console.log(`[RPA] Loading script for platform: ${platform}`)
@@ -104,21 +109,20 @@ export class RPAEngine {
     }
   }
 
-  // 通过本地RPA Tool执行快捷键
+  // 通过本地RPA Tool执行快捷键（修复：使用正确的API格式）
   async executeLocalHotkey(keys: string[]): Promise<any> {
     console.log(`[RPA] Executing local hotkey:`, keys)
     
     try {
+      const url = this.buildRPAUrl('/keyboard/hotkey')
+      console.log(`[RPA] Hotkey API URL:`, url)
+      
       const response = await axios.post(
-        `${this.localRPA.baseUrl}/execute`,
-        {
-          action: 'hotkey',
-          params: { keys }
-        },
+        url,
+        { keys },  // 直接发送keys数组
         {
           headers: {
-            'Content-Type': 'application/json',
-            'X-Auth-Token': this.localRPA.authToken
+            'Content-Type': 'application/json'
           },
           timeout: 5000
         }
@@ -132,27 +136,107 @@ export class RPAEngine {
     }
   }
 
-  // 执行本地RPA动作（通用）
-  async executeLocalAction(action: string, params: Record<string, any>): Promise<any> {
-    console.log(`[RPA] Executing local action: ${action}`, params)
+  // 执行鼠标点击
+  async executeLocalClick(x: number, y: number, button: string = 'left'): Promise<any> {
+    console.log(`[RPA] Executing local click: (${x}, ${y}) ${button}`)
     
     try {
+      const url = this.buildRPAUrl('/mouse/click')
       const response = await axios.post(
-        `${this.localRPA.baseUrl}/execute`,
-        { action, params },
+        url,
+        { x, y, button },
         {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Auth-Token': this.localRPA.authToken
-          },
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 5000
+        }
+      )
+      
+      return response.data
+    } catch (error) {
+      console.error(`[RPA] Local click failed:`, error)
+      throw error
+    }
+  }
+
+  // 执行键盘输入
+  async executeLocalType(text: string): Promise<any> {
+    console.log(`[RPA] Executing local type:`, text)
+    
+    try {
+      const url = this.buildRPAUrl('/keyboard/type')
+      const response = await axios.post(
+        url,
+        { text },
+        {
+          headers: { 'Content-Type': 'application/json' },
           timeout: 10000
         }
       )
       
       return response.data
     } catch (error) {
-      console.error(`[RPA] Local action failed:`, error)
+      console.error(`[RPA] Local type failed:`, error)
       throw error
+    }
+  }
+
+  // 执行命令
+  async executeLocalCommand(command: string, timeout: number = 30): Promise<any> {
+    console.log(`[RPA] Executing local command:`, command)
+    
+    try {
+      const url = this.buildRPAUrl('/execute')
+      const response = await axios.post(
+        url,
+        { command, timeout },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: (timeout + 5) * 1000  // 给axios多5秒超时
+        }
+      )
+      
+      return response.data
+    } catch (error) {
+      console.error(`[RPA] Local command failed:`, error)
+      throw error
+    }
+  }
+
+  // 获取屏幕截图
+  async getScreenshot(): Promise<Buffer> {
+    console.log(`[RPA] Getting screenshot`)
+    
+    try {
+      const url = this.buildRPAUrl('/screenshot')
+      const response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        timeout: 10000
+      })
+      
+      return Buffer.from(response.data)
+    } catch (error) {
+      console.error(`[RPA] Screenshot failed:`, error)
+      throw error
+    }
+  }
+
+  // 执行本地RPA动作（通用）
+  async executeLocalAction(action: string, params: Record<string, any>): Promise<any> {
+    console.log(`[RPA] Executing local action: ${action}`, params)
+    
+    switch (action) {
+      case 'hotkey':
+        return this.executeLocalHotkey(params.keys || [])
+      case 'click':
+        return this.executeLocalClick(params.x, params.y, params.button)
+      case 'type':
+        return this.executeLocalType(params.text)
+      case 'execute':
+        return this.executeLocalCommand(params.command, params.timeout)
+      case 'screenshot':
+        return this.getScreenshot()
+      default:
+        throw new Error(`Unknown action: ${action}`)
     }
   }
 

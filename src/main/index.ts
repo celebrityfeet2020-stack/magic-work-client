@@ -143,22 +143,66 @@ ipcMain.handle('stop-asr', () => {
 })
 
 // ===== RPA 自动化执行 =====
+// 修复：使用正确的RPA Tool API格式
 ipcMain.handle('run-rpa', async (_event, { action, params }) => {
   console.log('[Main] Running RPA action:', action, params)
   
   try {
-    // 调用本地RPA服务
-    const response = await fetch(`${CONFIG.RPA_BASE_URL}/execute`, {
+    // 根据action类型构建正确的API URL
+    let apiUrl: string
+    let requestBody: any
+    
+    if (action === 'hotkey' && params.keys) {
+      // 快捷键操作
+      apiUrl = `${CONFIG.RPA_BASE_URL}/${CONFIG.RPA_AUTH_TOKEN}/api/keyboard/hotkey`
+      requestBody = { keys: params.keys }
+    } else if (action === 'click' && params.x !== undefined && params.y !== undefined) {
+      // 鼠标点击操作
+      apiUrl = `${CONFIG.RPA_BASE_URL}/${CONFIG.RPA_AUTH_TOKEN}/api/mouse/click`
+      requestBody = { x: params.x, y: params.y, button: params.button || 'left' }
+    } else if (action === 'type' && params.text) {
+      // 键盘输入操作
+      apiUrl = `${CONFIG.RPA_BASE_URL}/${CONFIG.RPA_AUTH_TOKEN}/api/keyboard/type`
+      requestBody = { text: params.text }
+    } else if (action === 'screenshot') {
+      // 截图操作
+      apiUrl = `${CONFIG.RPA_BASE_URL}/${CONFIG.RPA_AUTH_TOKEN}/api/screenshot`
+      // GET请求，不需要body
+      const response = await fetch(apiUrl)
+      if (response.ok) {
+        return { success: true, message: 'Screenshot captured' }
+      } else {
+        return { success: false, error: 'Screenshot failed' }
+      }
+    } else if (action === 'execute' && params.command) {
+      // 执行命令
+      apiUrl = `${CONFIG.RPA_BASE_URL}/${CONFIG.RPA_AUTH_TOKEN}/api/execute`
+      requestBody = { command: params.command, timeout: params.timeout || 30 }
+    } else {
+      return { success: false, error: `Unknown action: ${action}` }
+    }
+    
+    console.log('[Main] RPA API URL:', apiUrl)
+    console.log('[Main] RPA Request Body:', requestBody)
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'X-Auth-Token': CONFIG.RPA_AUTH_TOKEN
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ action, params })
+      body: JSON.stringify(requestBody)
     })
     
     const result = await response.json()
-    return result
+    console.log('[Main] RPA Response:', result)
+    
+    // RPA Tool返回的结果中success字段表示执行是否成功
+    if (result.success !== undefined) {
+      return result
+    } else {
+      // 兼容不同的返回格式
+      return { success: true, data: result }
+    }
   } catch (error: any) {
     console.error('[Main] RPA execution failed:', error)
     return { success: false, error: error.message }
