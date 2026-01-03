@@ -1,0 +1,65 @@
+name: Build Windows Electron App
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm install
+      - name: Build Electron app
+        run: npm run build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: List release files
+        run: dir release
+        shell: cmd
+        continue-on-error: true
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: magic-work-client-v2.2.0-windows
+          path: |
+            release/*.exe
+            release/*.zip
+            release/win-unpacked/
+          retention-days: 30
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v2.2.0
+          name: 魔作智控 v2.2.0
+          body: |
+            ## v2.2.0 更新内容
+            
+            ### 修复
+            - 修复智能回复配置保存不完整问题（下单欢迎语、随机公屏等设置现在可以正确保存）
+            - 修复智能控制触发关键词保存不完整问题（button_keyword_configs格式支持）
+            - 修复新建浏览器实例页面偶尔无法输入问题（增强CSS pointer-events和z-index）
+            - 修复代理实例打开黑屏问题（setProxy改为异步等待，添加错误处理）
+            
+            ### 后端更新
+            - 数据库表结构升级：script_books表新增blocked_keywords、order_reply、auto_float、updated_at字段
+            - 智能控制配置支持button_keyword_configs格式
+            - 增强错误处理和日志输出
+            
+            ### 前端更新
+            - 增强弹窗组件的交互性（z-index和pointer-events优化）
+            - 代理配置添加认证支持
+            - 页面加载失败时显示友好的错误提示
+          files: |
+            release/*.exe
+            release/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

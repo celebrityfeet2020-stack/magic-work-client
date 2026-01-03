@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 自定义滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* 拖拽区域 */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* 确保所有输入元素可交互 - v2.2.0 增强 */
+input, textarea, select, button, a, label {
+  -webkit-app-region: no-drag;
+  pointer-events: auto !important;
+}
+
+/* 弹窗内容不可拖拽 - v2.2.0 增强 */
+.fixed {
+  -webkit-app-region: no-drag;
+  pointer-events: auto !important;
+}
+
+/* v2.2.0: 弹窗遮罩层确保可交互 */
+.fixed.inset-0 {
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+}
+
+/* v2.2.0: 弹窗内容容器确保可交互 */
+.fixed.inset-0 > div {
+  pointer-events: auto !important;
+  -webkit-app-region: no-drag;
+}
+
+/* v2.2.0: 表单元素确保可交互 */
+form, form * {
+  -webkit-app-region: no-drag;
+  pointer-events: auto !important;
+}
+
+/* 状态指示器动画 */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-blink {
+  animation: blink 2s ease-in-out infinite;
+}
+
+/* 日志滚动容器 */
+.log-container {
+  scroll-behavior: smooth;
+}
+
+.log-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+/* 代码块样式 */
+.code-block {
+  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* 卡片悬停效果 */
+.card-hover {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* 按钮颜色变量 */
+:root {
+  --btn-red: #ef4444;
+  --btn-orange: #f97316;
+  --btn-yellow: #eab308;
+  --btn-green: #22c55e;
+  --btn-cyan: #06b6d4;
+  --btn-blue: #3b82f6;
+  --btn-purple: #a855f7;
+}
+
+/* 七色按钮样式 */
+.btn-red { background-color: var(--btn-red); }
+.btn-orange { background-color: var(--btn-orange); }
+.btn-yellow { background-color: var(--btn-yellow); }
+.btn-green { background-color: var(--btn-green); }
+.btn-cyan { background-color: var(--btn-cyan); }
+.btn-blue { background-color: var(--btn-blue); }
+.btn-purple { background-color: var(--btn-purple); }
