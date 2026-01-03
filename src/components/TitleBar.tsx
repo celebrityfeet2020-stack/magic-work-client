@@ -32,7 +32,7 @@ const TitleBar: React.FC = () => {
           <span className="text-white text-xs font-bold">魔</span>
         </div>
         <span className="text-magic-text font-semibold">魔作智控</span>
-        <span className="text-magic-text-secondary text-sm">v2.1.9</span>
+        <span className="text-magic-text-secondary text-sm">v2.1.10</span>
       </div>
 
       {/* 中间：状态指示器 */}
