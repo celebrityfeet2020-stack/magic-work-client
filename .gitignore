@@ -1,27 +1,6 @@
-# Dependencies
 node_modules/
-
-# Build output
-out/
 dist/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
+dist-electron/
+release/
 *.log
-npm-debug.log*
-
-# Environment
-.env.local
-.env.*.local
-
-# Electron
-*.asar
+.DS_Store

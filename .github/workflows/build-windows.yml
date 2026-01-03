@@ -24,31 +24,41 @@ jobs:
       - name: Build Electron app
         run: npm run build
 
-      - name: Package Windows exe
-        run: npx electron-builder --win --x64
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: List dist files
-        run: dir dist
+      - name: List release files
+        run: dir release
         shell: cmd
+        continue-on-error: true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: magic-work-client-windows
+          name: magic-work-client-v2.1.9-windows
           path: |
-            dist/*.exe
-            dist/*.zip
+            release/*.exe
+            release/*.zip
+            release/win-unpacked/
           retention-days: 30
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ github.run_number }}
-          name: 魔作智控 v${{ github.run_number }}
+          tag_name: v2.1.9
+          name: 魔作智控 v2.1.9
+          body: |
+            ## v2.1.9 更新内容
+            
+            ### 修复
+            - 修复智能回复保存失败问题（每次保存会创建新话术本）
+            - 修复智能控制保存失败问题（颜色格式不匹配）
+            - 修复版本号显示错误（显示v2.1.8而非v2.1.9）
+            - 修复浏览器实例黑屏/白屏问题（添加错误处理和日志）
+            
+            ### 优化
+            - 统一实例分布图排版样式（场控后台、直播间、水军使用相同的分组列表样式）
+            - 后端数据持久化修复（proxy_config等字段正确保存）
           files: |
-            dist/*.exe
+            release/*.exe
+            release/*.zip
           draft: false
           prerelease: false
         env:
