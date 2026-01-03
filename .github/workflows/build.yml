@@ -27,7 +27,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: magic-work-client-v2.2.0-windows
+          name: magic-work-client-v2.2.1-windows
           path: |
             release/*.exe
             release/*.zip
@@ -36,10 +36,10 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v2.2.0
-          name: 魔作智控 v2.2.0
+          tag_name: v2.2.1
+          name: 魔作智控 v2.2.1
           body: |
-            ## v2.2.0 更新内容
+            ## v2.2.1 更新内容
             
             ### 修复
             - 修复智能回复配置保存不完整问题（下单欢迎语、随机公屏等设置现在可以正确保存）

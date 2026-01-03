@@ -50,188 +50,479 @@ let mainWindow: BrowserWindow | null = null;
 const DESKTOP_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 /**
- * 浏览器指纹伪装脚本
- * 在页面加载前注入，伪装各种浏览器特征
+ * v2.2.0 增强版浏览器指纹伪装脚本
+ * 基于 puppeteer-extra-plugin-stealth 最佳实践
  */
 const FINGERPRINT_SPOOF_SCRIPT = `
+/**
+ * 魔作智控 v2.2.0 增强版浏览器指纹伪装脚本
+ * 基于 puppeteer-extra-plugin-stealth 最佳实践
+ * 
+ * 覆盖的检测点：
+ * 1. navigator.webdriver
+ * 2. navigator.plugins
+ * 3. navigator.languages
+ * 4. navigator.platform
+ * 5. navigator.hardwareConcurrency
+ * 6. navigator.deviceMemory
+ * 7. navigator.maxTouchPoints
+ * 8. navigator.vendor
+ * 9. navigator.connection
+ * 10. screen属性
+ * 11. window.chrome
+ * 12. chrome.runtime
+ * 13. chrome.app
+ * 14. chrome.csi
+ * 15. chrome.loadTimes
+ * 16. Permissions API
+ * 17. Canvas指纹噪声
+ * 18. WebGL指纹
+ * 19. getBattery API
+ * 20. iframe.contentWindow
+ * 21. window.outerWidth/outerHeight
+ * 22. 移除Electron特征
+ * 23. 移除自动化标志
+ * 24. sourceurl隐藏
+ */
+
 (function() {
   'use strict';
   
-  // 1. 伪装 navigator.webdriver
-  Object.defineProperty(navigator, 'webdriver', {
+  // ========== 1. navigator.webdriver ==========
+  // 使用ES6 Proxy来通过instanceof测试
+  const navigatorProto = Object.getPrototypeOf(navigator);
+  Object.defineProperty(navigatorProto, 'webdriver', {
     get: () => undefined,
     configurable: true
   });
   
-  delete navigator.__proto__.webdriver;
-
-  // 2. 伪装 navigator.plugins
-  const fakePlugins = [
-    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
-    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
-    { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
-  ];
+  // 删除webdriver属性
+  delete Object.getPrototypeOf(navigator).webdriver;
   
-  const pluginArray = {
-    length: fakePlugins.length,
-    item: function(index) { return this[index] || null; },
-    namedItem: function(name) {
-      for (let i = 0; i < this.length; i++) {
-        if (this[i].name === name) return this[i];
-      }
-      return null;
-    },
-    refresh: function() {}
+  // ========== 2. navigator.plugins ==========
+  // 创建逼真的插件列表
+  const makePlugin = (name, description, filename, mimeTypes) => {
+    const plugin = Object.create(Plugin.prototype);
+    Object.defineProperties(plugin, {
+      name: { value: name, enumerable: true },
+      description: { value: description, enumerable: true },
+      filename: { value: filename, enumerable: true },
+      length: { value: mimeTypes.length, enumerable: true }
+    });
+    mimeTypes.forEach((mt, i) => {
+      const mimeType = Object.create(MimeType.prototype);
+      Object.defineProperties(mimeType, {
+        type: { value: mt.type, enumerable: true },
+        suffixes: { value: mt.suffixes, enumerable: true },
+        description: { value: mt.description, enumerable: true },
+        enabledPlugin: { value: plugin, enumerable: true }
+      });
+      Object.defineProperty(plugin, i, { value: mimeType, enumerable: true });
+      Object.defineProperty(plugin, mt.type, { value: mimeType, enumerable: false });
+    });
+    return plugin;
   };
   
-  fakePlugins.forEach((plugin, i) => {
-    pluginArray[i] = plugin;
+  const pluginsData = [
+    {
+      name: 'Chrome PDF Plugin',
+      description: 'Portable Document Format',
+      filename: 'internal-pdf-viewer',
+      mimeTypes: [
+        { type: 'application/x-google-chrome-pdf', suffixes: 'pdf', description: 'Portable Document Format' }
+      ]
+    },
+    {
+      name: 'Chrome PDF Viewer',
+      description: '',
+      filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
+      mimeTypes: [
+        { type: 'application/pdf', suffixes: 'pdf', description: '' }
+      ]
+    },
+    {
+      name: 'Native Client',
+      description: '',
+      filename: 'internal-nacl-plugin',
+      mimeTypes: [
+        { type: 'application/x-nacl', suffixes: '', description: 'Native Client Executable' },
+        { type: 'application/x-pnacl', suffixes: '', description: 'Portable Native Client Executable' }
+      ]
+    }
+  ];
+  
+  const plugins = pluginsData.map(p => makePlugin(p.name, p.description, p.filename, p.mimeTypes));
+  const pluginArray = Object.create(PluginArray.prototype);
+  plugins.forEach((plugin, i) => {
+    Object.defineProperty(pluginArray, i, { value: plugin, enumerable: true });
+    Object.defineProperty(pluginArray, plugin.name, { value: plugin, enumerable: false });
   });
+  Object.defineProperty(pluginArray, 'length', { value: plugins.length, enumerable: true });
+  pluginArray.item = function(index) { return this[index] || null; };
+  pluginArray.namedItem = function(name) { return this[name] || null; };
+  pluginArray.refresh = function() {};
   
   Object.defineProperty(navigator, 'plugins', {
     get: () => pluginArray,
     configurable: true
   });
   
-  // 3. 伪装 navigator.languages
+  // ========== 3. navigator.languages ==========
   Object.defineProperty(navigator, 'languages', {
     get: () => ['zh-CN', 'zh', 'en-US', 'en'],
     configurable: true
   });
   
-  // 4. 伪装 navigator.platform
+  // ========== 4. navigator.platform ==========
   Object.defineProperty(navigator, 'platform', {
     get: () => 'Win32',
     configurable: true
   });
   
-  // 5. 伪装 navigator.hardwareConcurrency
+  // ========== 5. navigator.hardwareConcurrency ==========
   Object.defineProperty(navigator, 'hardwareConcurrency', {
     get: () => 8,
     configurable: true
   });
   
-  // 6. 伪装 navigator.deviceMemory
+  // ========== 6. navigator.deviceMemory ==========
   Object.defineProperty(navigator, 'deviceMemory', {
     get: () => 8,
     configurable: true
   });
   
-  // 7. 伪装 navigator.maxTouchPoints
+  // ========== 7. navigator.maxTouchPoints ==========
   Object.defineProperty(navigator, 'maxTouchPoints', {
     get: () => 0,
     configurable: true
   });
   
-  // 8. 伪装 screen 属性
+  // ========== 8. navigator.vendor ==========
+  Object.defineProperty(navigator, 'vendor', {
+    get: () => 'Google Inc.',
+    configurable: true
+  });
+  
+  // ========== 9. navigator.connection ==========
+  if (!navigator.connection) {
+    const connection = {
+      effectiveType: '4g',
+      rtt: 50,
+      downlink: 10,
+      saveData: false,
+      onchange: null,
+      addEventListener: function() {},
+      removeEventListener: function() {},
+      dispatchEvent: function() { return true; }
+    };
+    Object.defineProperty(navigator, 'connection', {
+      get: () => connection,
+      configurable: true
+    });
+  }
+  
+  // ========== 10. screen属性 ==========
   const screenProps = {
     width: 1920,
     height: 1080,
     availWidth: 1920,
     availHeight: 1040,
     colorDepth: 24,
-    pixelDepth: 24
+    pixelDepth: 24,
+    availLeft: 0,
+    availTop: 0
   };
-  
-  Object.keys(screenProps).forEach(prop => {
-    Object.defineProperty(screen, prop, {
-      get: () => screenProps[prop],
+  Object.keys(screenProps).forEach(key => {
+    Object.defineProperty(screen, key, {
+      get: () => screenProps[key],
       configurable: true
     });
   });
   
-  // 9. 伪装 window.chrome 对象
+  // ========== 11. window.chrome ==========
   if (!window.chrome) {
-    window.chrome = {
-      runtime: {},
-      loadTimes: function() {},
-      csi: function() {},
-      app: {}
+    window.chrome = {};
+  }
+  
+  // ========== 12. chrome.runtime ==========
+  // 这是检测Electron的关键点之一
+  if (!window.chrome.runtime) {
+    window.chrome.runtime = {
+      connect: function() {
+        return {
+          onMessage: { addListener: function() {} },
+          onDisconnect: { addListener: function() {} },
+          postMessage: function() {}
+        };
+      },
+      sendMessage: function(extensionId, message, options, responseCallback) {
+        if (typeof options === 'function') {
+          responseCallback = options;
+        }
+        if (responseCallback) {
+          setTimeout(() => responseCallback(), 0);
+        }
+      },
+      onMessage: {
+        addListener: function() {},
+        removeListener: function() {},
+        hasListener: function() { return false; }
+      },
+      onConnect: {
+        addListener: function() {},
+        removeListener: function() {},
+        hasListener: function() { return false; }
+      },
+      id: undefined,
+      getManifest: function() { return {}; },
+      getURL: function(path) { return ''; },
+      getPlatformInfo: function(callback) {
+        callback({ os: 'win', arch: 'x86-64', nacl_arch: 'x86-64' });
+      }
     };
   }
   
-  // 10. 伪装 Permissions API
-  const originalQuery = window.navigator.permissions?.query;
-  if (originalQuery) {
-    window.navigator.permissions.query = function(parameters) {
-      if (parameters.name === 'notifications') {
-        return Promise.resolve({ state: 'prompt', onchange: null });
-      }
-      return originalQuery.call(this, parameters);
+  // ========== 13. chrome.app ==========
+  if (!window.chrome.app) {
+    window.chrome.app = {
+      isInstalled: false,
+      InstallState: {
+        DISABLED: 'disabled',
+        INSTALLED: 'installed',
+        NOT_INSTALLED: 'not_installed'
+      },
+      RunningState: {
+        CANNOT_RUN: 'cannot_run',
+        READY_TO_RUN: 'ready_to_run',
+        RUNNING: 'running'
+      },
+      getDetails: function() { return null; },
+      getIsInstalled: function() { return false; },
+      installState: function(callback) {
+        callback('not_installed');
+      },
+      runningState: function() { return 'cannot_run'; }
     };
   }
   
-  // 11. Canvas指纹伪装
-  const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-  HTMLCanvasElement.prototype.toDataURL = function(type, quality) {
-    if (this.width > 0 && this.height > 0) {
-      const ctx = this.getContext('2d');
-      if (ctx) {
-        const imageData = ctx.getImageData(0, 0, 1, 1);
-        imageData.data[0] = (imageData.data[0] + 1) % 256;
-        ctx.putImageData(imageData, 0, 0);
-      }
+  // ========== 14. chrome.csi ==========
+  if (!window.chrome.csi) {
+    window.chrome.csi = function() {
+      return {
+        startE: Date.now(),
+        onloadT: Date.now(),
+        pageT: Date.now() - performance.timing.navigationStart,
+        tran: 15
+      };
+    };
+  }
+  
+  // ========== 15. chrome.loadTimes ==========
+  if (!window.chrome.loadTimes) {
+    window.chrome.loadTimes = function() {
+      const timing = performance.timing;
+      return {
+        commitLoadTime: timing.responseStart / 1000,
+        connectionInfo: 'h2',
+        finishDocumentLoadTime: timing.domContentLoadedEventEnd / 1000,
+        finishLoadTime: timing.loadEventEnd / 1000,
+        firstPaintAfterLoadTime: 0,
+        firstPaintTime: timing.responseEnd / 1000,
+        navigationType: 'Other',
+        npnNegotiatedProtocol: 'h2',
+        requestTime: timing.requestStart / 1000,
+        startLoadTime: timing.navigationStart / 1000,
+        wasAlternateProtocolAvailable: false,
+        wasFetchedViaSpdy: true,
+        wasNpnNegotiated: true
+      };
+    };
+  }
+  
+  // ========== 16. Permissions API ==========
+  const originalQuery = window.navigator.permissions.query;
+  window.navigator.permissions.query = function(parameters) {
+    if (parameters.name === 'notifications') {
+      return Promise.resolve({ state: Notification.permission, onchange: null });
     }
-    return originalToDataURL.call(this, type, quality);
+    return originalQuery.call(this, parameters);
   };
   
-  // 12. WebGL指纹伪装
-  const getParameterProxyHandler = {
+  // ========== 17. Canvas指纹噪声 ==========
+  const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+  HTMLCanvasElement.prototype.toDataURL = function(type) {
+    if (type === 'image/png' || type === undefined) {
+      const context = this.getContext('2d');
+      if (context) {
+        const imageData = context.getImageData(0, 0, this.width, this.height);
+        const data = imageData.data;
+        // 添加微小噪声
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = data[i] ^ (Math.random() * 2 | 0);
+        }
+        context.putImageData(imageData, 0, 0);
+      }
+    }
+    return originalToDataURL.apply(this, arguments);
+  };
+  
+  // ========== 18. WebGL指纹 ==========
+  const getParameterProxy = new Proxy(WebGLRenderingContext.prototype.getParameter, {
     apply: function(target, thisArg, args) {
       const param = args[0];
-      if (param === 37445) return 'Google Inc. (NVIDIA)';
-      if (param === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1060 Direct3D11 vs_5_0 ps_5_0, D3D11)';
-      return target.apply(thisArg, args);
+      // UNMASKED_VENDOR_WEBGL
+      if (param === 37445) {
+        return 'Google Inc. (NVIDIA)';
+      }
+      // UNMASKED_RENDERER_WEBGL
+      if (param === 37446) {
+        return 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1060 6GB Direct3D11 vs_5_0 ps_5_0, D3D11)';
+      }
+      return Reflect.apply(target, thisArg, args);
     }
-  };
+  });
+  WebGLRenderingContext.prototype.getParameter = getParameterProxy;
   
-  const originalGetParameter = WebGLRenderingContext.prototype.getParameter;
-  WebGLRenderingContext.prototype.getParameter = new Proxy(originalGetParameter, getParameterProxyHandler);
-  
+  // WebGL2也需要处理
   if (typeof WebGL2RenderingContext !== 'undefined') {
-    const originalGetParameter2 = WebGL2RenderingContext.prototype.getParameter;
-    WebGL2RenderingContext.prototype.getParameter = new Proxy(originalGetParameter2, getParameterProxyHandler);
+    WebGL2RenderingContext.prototype.getParameter = getParameterProxy;
   }
   
-  // 13. 移除Electron特征
-  delete window.process;
-  delete window.require;
-  delete window.module;
-  delete window.exports;
-  delete window.__dirname;
-  delete window.__filename;
-  
-  // 14. 伪装 navigator.connection
-  if (!navigator.connection) {
-    Object.defineProperty(navigator, 'connection', {
-      get: () => ({
-        effectiveType: '4g',
-        rtt: 50,
-        downlink: 10,
-        saveData: false
-      }),
-      configurable: true
-    });
-  }
-  
-  // 15. 伪装 getBattery API
+  // ========== 19. getBattery API ==========
   if (navigator.getBattery) {
     navigator.getBattery = function() {
       return Promise.resolve({
         charging: true,
         chargingTime: 0,
         dischargingTime: Infinity,
-        level: 1.0,
+        level: 1,
         onchargingchange: null,
         onchargingtimechange: null,
         ondischargingtimechange: null,
-        onlevelchange: null
+        onlevelchange: null,
+        addEventListener: function() {},
+        removeEventListener: function() {},
+        dispatchEvent: function() { return true; }
       });
     };
   }
   
-  console.log('[Fingerprint] Browser fingerprint spoofing applied');
+  // ========== 20. iframe.contentWindow ==========
+  // 代理iframe的contentWindow，使其行为像普通Chrome
+  const iframeProto = HTMLIFrameElement.prototype;
+  const originalContentWindow = Object.getOwnPropertyDescriptor(iframeProto, 'contentWindow');
+  
+  Object.defineProperty(iframeProto, 'contentWindow', {
+    get: function() {
+      const iframe = this;
+      const contentWindow = originalContentWindow.get.call(iframe);
+      
+      if (!contentWindow) return contentWindow;
+      
+      // 创建代理来处理特殊情况
+      return new Proxy(contentWindow, {
+        get: function(target, key) {
+          if (key === 'self') {
+            return target;
+          }
+          if (key === 'frameElement') {
+            return iframe;
+          }
+          const value = target[key];
+          if (typeof value === 'function') {
+            return value.bind(target);
+          }
+          return value;
+        }
+      });
+    },
+    configurable: true
+  });
+  
+  // ========== 21. window.outerWidth/outerHeight ==========
+  // 确保outerWidth/outerHeight与innerWidth/innerHeight的差值合理
+  Object.defineProperty(window, 'outerWidth', {
+    get: () => window.innerWidth + 16,
+    configurable: true
+  });
+  Object.defineProperty(window, 'outerHeight', {
+    get: () => window.innerHeight + 88,
+    configurable: true
+  });
+  
+  // ========== 22. 移除Electron特征 ==========
+  // 删除Electron相关的全局变量
+  delete window.process;
+  delete window.require;
+  delete window.module;
+  delete window.exports;
+  delete window.__dirname;
+  delete window.__filename;
+  delete window.Buffer;
+  delete window.global;
+  
+  // 移除navigator中的Electron特征
+  if (navigator.userAgent.includes('Electron')) {
+    Object.defineProperty(navigator, 'userAgent', {
+      get: () => navigator.userAgent.replace(/Electron\/[\d.]+\s?/g, ''),
+      configurable: true
+    });
+  }
+  
+  // ========== 23. 移除自动化标志 ==========
+  // 移除可能暴露自动化的属性
+  Object.defineProperty(navigator, 'webdriver', {
+    get: () => undefined,
+    configurable: true
+  });
+  
+  // 移除document.hidden的异常行为
+  Object.defineProperty(document, 'hidden', {
+    get: () => false,
+    configurable: true
+  });
+  
+  Object.defineProperty(document, 'visibilityState', {
+    get: () => 'visible',
+    configurable: true
+  });
+  
+  // ========== 24. 函数toString伪装 ==========
+  // 确保被修改的函数的toString返回原生代码
+  const nativeToString = Function.prototype.toString;
+  const proxyToString = function() {
+    if (this === navigator.permissions.query) {
+      return 'function query() { [native code] }';
+    }
+    if (this === HTMLCanvasElement.prototype.toDataURL) {
+      return 'function toDataURL() { [native code] }';
+    }
+    if (this === WebGLRenderingContext.prototype.getParameter) {
+      return 'function getParameter() { [native code] }';
+    }
+    return nativeToString.call(this);
+  };
+  Function.prototype.toString = proxyToString;
+  
+  // 确保toString本身也返回原生代码
+  Function.prototype.toString.toString = function() {
+    return 'function toString() { [native code] }';
+  };
+  
+  // ========== 25. 媒体编解码器伪装 ==========
+  // 伪装支持常见的专有编解码器
+  const originalCanPlayType = HTMLMediaElement.prototype.canPlayType;
+  HTMLMediaElement.prototype.canPlayType = function(type) {
+    // H.264 和 AAC 是专有编解码器，Chromium默认不支持
+    if (type.includes('avc1') || type.includes('mp4a')) {
+      return 'probably';
+    }
+    return originalCanPlayType.call(this, type);
+  };
+  
+  console.log('[Stealth] 浏览器指纹伪装已加载 v2.2.0');
 })();
+
 `;
 
 /**

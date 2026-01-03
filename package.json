@@ -1,6 +1,6 @@
 {
   "name": "magic-work-client",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "魔作智控 2.0 - 直播智能中控客户端",
   "author": "MagicWork Team",
   "main": "dist-electron/main.js",

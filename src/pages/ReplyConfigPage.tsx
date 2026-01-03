@@ -340,11 +340,15 @@ const ScriptBookEditor: React.FC<{
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // 使用update方法更新现有话术本，而不是创建新的
-      const updated = await scriptAPI.update(editedBook.id, editedBook.name, editedBook.pairs, editedBook.blocked_keywords);
-      // 保留本地的order_reply和auto_float配置
-      updated.order_reply = editedBook.order_reply;
-      updated.auto_float = editedBook.auto_float;
+      // v2.2.0: 传递完整配置到后端，包括order_reply和auto_float
+      const updated = await scriptAPI.update(
+        editedBook.id, 
+        editedBook.name, 
+        editedBook.pairs, 
+        editedBook.blocked_keywords,
+        editedBook.order_reply,
+        editedBook.auto_float
+      );
       onUpdate(updated);
       onLog({ type: 'success', source: '智能回复', message: `已保存话术本: ${updated.name}` });
     } catch (error) {

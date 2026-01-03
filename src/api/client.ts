@@ -187,11 +187,20 @@ export interface CreateControlConfigRequest {
 }
 
 // 转换后端返回的配置数据为前端格式
+// v2.2.0: 添加字段名转换 (auto_loop_enabled -> auto_loop, loop_interval_seconds -> loop_interval)
 const transformControlConfig = (data: any): ControlConfig => {
+  // 转换按钮配置字段名
+  const transformedButtons = (data.click_buttons || data.button_configs || []).map((btn: any) => ({
+    ...btn,
+    // v2.2.0: 后端字段名转换为前端字段名
+    auto_loop: btn.auto_loop_enabled ?? btn.auto_loop ?? false,
+    loop_interval: btn.loop_interval_seconds ?? btn.loop_interval ?? 30,
+  }));
+  
   return {
     ...data,
     // 后端使用 click_buttons，前端使用 button_configs
-    button_configs: data.click_buttons || data.button_configs || [],
+    button_configs: transformedButtons,
     // 确保 link_configs 存在，并转换为新格式
     link_configs: (data.link_configs || []).map((link: any) => {
       // 如果已经是新格式，直接使用
@@ -305,6 +314,7 @@ export interface ScriptPair {
 }
 
 // 后端返回的话术本格式
+// v2.2.1: 添加blocked_keywords, order_reply, auto_float字段
 export interface ScriptBookBackend {
   id: string;
   name: string;
@@ -313,6 +323,11 @@ export interface ScriptBookBackend {
   conflict_warnings?: string[];
   enabled?: boolean;
   created_at: string;
+  // v2.2.1: 新增字段
+  blocked_keywords?: string[];
+  order_reply?: OrderReplyConfig;
+  auto_float?: AutoFloatConfig;
+  updated_at?: string;
 }
 
 // 下单回复配置
@@ -402,21 +417,36 @@ export const scriptAPI = {
   },
   
   // 更新话术本
-  update: async (id: string, name: string, pairs?: ScriptPair[], blocked_keywords?: string[]): Promise<ScriptBook> => {
+  // v2.2.0: 添加order_reply和auto_float参数
+  update: async (
+    id: string, 
+    name: string, 
+    pairs?: ScriptPair[], 
+    blocked_keywords?: string[],
+    order_reply?: OrderReplyConfig,
+    auto_float?: AutoFloatConfig
+  ): Promise<ScriptBook> => {
     // 转换前端格式到后端格式
     const backendPairs = pairs?.map(p => ({
       questions: [p.question],  // 单个问题转换为数组
       answers: p.answers,
     }));
     
+    // v2.2.0: 发送完整配置到后端
     const backend: ScriptBookBackend = await apiClient.put(`/api/v1/scripts/${id}`, { 
       name, 
       pairs: backendPairs,
+      blocked_keywords: blocked_keywords || [],
+      order_reply: order_reply || null,
+      auto_float: auto_float || null,
     });
     
-    // 转换后端响应到前端格式，并保留blocked_keywords
+    // 转换后端响应到前端格式
     const result = transformScriptBook(backend);
-    result.blocked_keywords = blocked_keywords || [];
+    // 如果后端没有返回这些字段，使用传入的值
+    result.blocked_keywords = backend.blocked_keywords || blocked_keywords || [];
+    result.order_reply = backend.order_reply || order_reply || result.order_reply;
+    result.auto_float = backend.auto_float || auto_float || result.auto_float;
     return result;
   },
   

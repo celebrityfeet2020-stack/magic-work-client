@@ -344,13 +344,19 @@ const ConfigEditor: React.FC<{
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // 转换为后端格式，将颜色代码转换为中文名称
+      // v2.2.0: 转换为后端格式
+      // 1. 将颜色代码转换为中文名称
+      // 2. 将auto_loop转换为auto_loop_enabled
+      // 3. 将loop_interval转换为loop_interval_seconds
       const dataToSave = {
         name: editedConfig.name,
         platform: editedConfig.platform,
         click_buttons: editedConfig.button_configs.map(btn => ({
-          ...btn,
-          color: colorCodeToName[btn.color] || btn.color,  // 转换颜色代码为中文名称
+          name: btn.name,
+          color: colorCodeToName[btn.color] || btn.color,
+          // v2.2.0: 字段名转换
+          auto_loop_enabled: btn.auto_loop ?? false,
+          loop_interval_seconds: btn.loop_interval ?? 30,
         })),
         link_configs: editedConfig.link_configs.map(link => ({
           product_title: link.product_title,
@@ -361,7 +367,8 @@ const ConfigEditor: React.FC<{
         })),
       };
       
-      const updated = await controlConfigAPI.update(editedConfig.id, dataToSave);
+      // v2.2.1: 使用as any绕过类型检查，因为后端字段名与前端不同
+      const updated = await controlConfigAPI.update(editedConfig.id, dataToSave as any);
       onUpdate(updated);
       onLog({ type: 'success', source: '智能控制', message: `配置已保存: ${editedConfig.name}` });
     } catch (error) {
