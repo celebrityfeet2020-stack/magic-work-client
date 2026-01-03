@@ -18,7 +18,6 @@ const Dashboard: React.FC = () => {
     triggerWordCount, 
     transcripts, 
     logs, 
-    instanceStatus,
     asrStatus,
     instances,
   } = useStore();

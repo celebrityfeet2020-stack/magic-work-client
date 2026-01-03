@@ -579,7 +579,7 @@ function createControlPanelWindow(
       console.log('[Main] View finished loading:', url);
     });
     
-    view.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    view.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
       console.error('[Main] View failed to load:', validatedURL, errorCode, errorDescription);
     });
     
@@ -696,7 +696,7 @@ function createSoldierWindow(
     console.log('[Main] Soldier view finished loading:', config.roomUrl);
   });
   
-  view.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+  view.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
     console.error('[Main] Soldier view failed to load:', validatedURL, errorCode, errorDescription);
   });
 
